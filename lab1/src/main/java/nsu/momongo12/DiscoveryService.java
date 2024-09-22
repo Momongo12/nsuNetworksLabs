@@ -1,59 +1,67 @@
 package nsu.momongo12;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.InetAddress;
-import java.net.MulticastSocket;
-import java.net.NetworkInterface;
-import java.net.SocketException;
-import java.util.Enumeration;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.net.*;
+import java.util.*;
+import java.util.concurrent.*;
 
-class DiscoveryService {
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class DiscoveryService {
+
+    private static final Logger logger = LoggerFactory.getLogger(DiscoveryService.class);
 
     private final InetAddress groupAddress;
     private final MulticastSocket socket;
     private final int port;
+
     private final Set<InetAddress> liveInstances = ConcurrentHashMap.newKeySet();
     private final Map<InetAddress, Long> instanceTimestamps = new ConcurrentHashMap<>();
 
     private final Set<InetAddress> localAddresses;
 
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(3);
 
-    public DiscoveryService(InetAddress groupAddress, int port) throws IOException {
+    private final int heartbeatInterval;
+    private final int cleanupInterval;
+    private final int instanceTimeout;
+    private final String heartbeatMessage;
+    private final int bufferSize;
+
+    public DiscoveryService(InetAddress groupAddress, int port, Properties properties) throws IOException {
         this.groupAddress = groupAddress;
         this.port = port;
-        // Create a MulticastSocket bound to the appropriate port
+
+        heartbeatInterval = Integer.parseInt(properties.getProperty("heartbeat.interval", "1000"));
+        cleanupInterval = Integer.parseInt(properties.getProperty("cleanup.interval", "1000"));
+        instanceTimeout = Integer.parseInt(properties.getProperty("instance.timeout", "3000"));
+        heartbeatMessage = properties.getProperty("heartbeat.message", "HELLO");
+        bufferSize = Integer.parseInt(properties.getProperty("buffer.size", "256"));
+
+        int multicastTTL = Integer.parseInt(properties.getProperty("multicast.ttl", "1"));
+
         socket = new MulticastSocket(port);
         socket.setReuseAddress(true);
-        socket.setTimeToLive(1); // stay within local network
-        socket.joinGroup(groupAddress);
+        socket.setTimeToLive(multicastTTL);
+
+        NetworkInterface networkInterface = getNetworkInterface();
+
+        SocketAddress group = new InetSocketAddress(groupAddress, port);
+        socket.joinGroup(group, networkInterface);
 
         localAddresses = getLocalAddresses();
     }
 
     public void start() {
-        // Start the sender task
-        scheduler.scheduleAtFixedRate(this::sendHeartbeat, 0, 1, TimeUnit.SECONDS);
-
-        // Start the receiver task
+        scheduler.scheduleAtFixedRate(this::sendHeartbeat, 0, heartbeatInterval, TimeUnit.MILLISECONDS);
         scheduler.execute(this::receiveMessages);
-
-        // Start the cleanup task
-        scheduler.scheduleAtFixedRate(this::cleanupInstances, 0, 1, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(this::cleanupInstances, 0, cleanupInterval, TimeUnit.MILLISECONDS);
     }
 
     private void sendHeartbeat() {
         try {
-            byte[] message = "HELLO".getBytes();
+            byte[] message = heartbeatMessage.getBytes();
             DatagramPacket packet = new DatagramPacket(
                 message,
                 message.length,
@@ -62,32 +70,29 @@ class DiscoveryService {
             );
             socket.send(packet);
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Error sending heartbeat: {}", e.getMessage(), e);
         }
     }
 
     private void receiveMessages() {
-        byte[] buf = new byte[256];
+        byte[] buf = new byte[bufferSize];
         while (true) {
             try {
                 DatagramPacket packet = new DatagramPacket(buf, buf.length);
                 socket.receive(packet);
                 InetAddress senderAddress = packet.getAddress();
 
-                // Ignore messages from ourselves
                 if (localAddresses.contains(senderAddress)) {
                     continue;
                 }
 
-                // Update the timestamp for this instance
                 instanceTimestamps.put(senderAddress, System.currentTimeMillis());
 
-                // If this is a new instance, add it and print the live instances
                 if (liveInstances.add(senderAddress)) {
                     printLiveInstances();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.error("Error receiving message: {}", e.getMessage(), e);
             }
         }
     }
@@ -98,7 +103,7 @@ class DiscoveryService {
         Iterator<Map.Entry<InetAddress, Long>> iterator = instanceTimestamps.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<InetAddress, Long> entry = iterator.next();
-            if (now - entry.getValue() > 3000) { // 3 seconds timeout
+            if (now - entry.getValue() > instanceTimeout) {
                 InetAddress address = entry.getKey();
                 iterator.remove();
                 liveInstances.remove(address);
@@ -111,11 +116,11 @@ class DiscoveryService {
     }
 
     private synchronized void printLiveInstances() {
-        System.out.println("Live instances:");
+        logger.info("Live instances:");
         for (InetAddress address : liveInstances) {
-            System.out.println(address.getHostAddress());
+            logger.info(address.getHostAddress());
         }
-        System.out.println("-----");
+        logger.info("-----");
     }
 
     private Set<InetAddress> getLocalAddresses() throws SocketException {
@@ -123,6 +128,9 @@ class DiscoveryService {
         Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
         while (interfaces.hasMoreElements()) {
             NetworkInterface ni = interfaces.nextElement();
+            if (!ni.isUp() || ni.isLoopback()) {
+                continue;
+            }
             Enumeration<InetAddress> inetAddresses = ni.getInetAddresses();
             while (inetAddresses.hasMoreElements()) {
                 InetAddress addr = inetAddresses.nextElement();
@@ -130,5 +138,16 @@ class DiscoveryService {
             }
         }
         return addresses;
+    }
+
+    private NetworkInterface getNetworkInterface() throws SocketException {
+        Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+        while (interfaces.hasMoreElements()) {
+            NetworkInterface ni = interfaces.nextElement();
+            if (ni.isUp() && ni.supportsMulticast()) {
+                return ni;
+            }
+        }
+        throw new SocketException("No suitable network interface found for multicast");
     }
 }
