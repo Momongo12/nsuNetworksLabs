@@ -6,12 +6,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class DiscoveryService {
 
     private static final Logger logger = LoggerFactory.getLogger(DiscoveryService.class);
+    private static final Gson gson = new Gson();
 
     private final InetAddress groupAddress;
     private final MulticastSocket socket;
@@ -95,57 +98,38 @@ public class DiscoveryService {
                 socket.receive(packet);
                 InetAddress senderAddress = packet.getAddress();
 
-                if (localAddresses.contains(senderAddress)) {
-                    logger.debug("Received message from self, ignoring.");
+                String received = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
+                logger.debug("Received message: {}", received);
+
+                InstanceInfo heartbeat;
+                try {
+                    heartbeat = gson.fromJson(received, InstanceInfo.class);
+                } catch (JsonSyntaxException e) {
+                    logger.warn("Received invalid heartbeat message: {}", received);
                     continue;
                 }
 
-                String received = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
-                logger.debug("Received heartbeat: {}", received);
-
-                Optional<InstanceInfo> instanceOpt = parseHeartbeat(received, senderAddress);
-                if (instanceOpt.isPresent()) {
-                    InstanceInfo instance = instanceOpt.get();
-                    instanceTimestamps.put(instance.id(), System.currentTimeMillis());
-
-                    if (liveInstances.add(instance)) {
-                        logger.info("New instance detected: {}", instance);
-                        printLiveInstances();
-                    } else {
-                        liveInstances.remove(instance);
-                        liveInstances.add(instance);
-                        logger.debug("Updated instance: {}", instance);
-                    }
-                } else {
-                    logger.warn("Failed to parse heartbeat message: {}", received);
+                if (INSTANCE_ID.equals(heartbeat.id())) {
+                    logger.debug("Ignored own heartbeat message.");
+                    continue;
                 }
+
+                InstanceInfo instance = new InstanceInfo(heartbeat.id(), heartbeat.readiness(), senderAddress);
+
+                instanceTimestamps.put(instance.id(), System.currentTimeMillis());
+
+                if (liveInstances.add(instance)) {
+                    logger.info("New instance detected: {}", instance);
+                    printLiveInstances();
+                } else {
+                    liveInstances.remove(instance);
+                    liveInstances.add(instance);
+                    logger.debug("Updated instance: {}", instance);
+                }
+
             } catch (IOException e) {
                 logger.error("Error receiving message: {}", e.getMessage(), e);
             }
-        }
-    }
-
-    private Optional<InstanceInfo> parseHeartbeat(String message, InetAddress senderAddress) {
-        String[] parts = message.split(";");
-        String id = null;
-        Boolean ready = null;
-
-        for (String part : parts) {
-            String[] keyValue = part.split("=");
-            if (keyValue.length != 2) continue;
-            String key = keyValue[0].trim();
-            String value = keyValue[1].trim();
-            if (key.equalsIgnoreCase("id")) {
-                id = value;
-            } else if (key.equalsIgnoreCase("ready")) {
-                ready = Boolean.parseBoolean(value);
-            }
-        }
-
-        if (id != null && ready != null) {
-            return Optional.of(new InstanceInfo(id, ready, senderAddress));
-        } else {
-            return Optional.empty();
         }
     }
 
