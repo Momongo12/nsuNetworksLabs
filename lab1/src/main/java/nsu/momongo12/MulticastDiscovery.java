@@ -14,13 +14,12 @@ public class MulticastDiscovery {
 
     public static void main(String[] args) {
         if (args.length < 1 || args.length > 2) {
-            logger.error("Usage: java -jar multicast-discovery.jar <multicast-group-address> [port] [interface]");
+            logger.error("Usage: java -jar multicast-discovery.jar <multicast-group-address> [port]");
             System.exit(1);
         }
 
         String groupAddressStr = args[0];
         int port;
-        String interfaceName;
 
         Properties properties = new Properties();
         try (InputStream input = MulticastDiscovery.class.getClassLoader().getResourceAsStream("config.properties")) {
@@ -35,23 +34,23 @@ public class MulticastDiscovery {
         }
 
         if (args.length == 2) {
-            port = Integer.parseInt(args[1]);
+            try {
+                port = Integer.parseInt(args[1]);
+            } catch (NumberFormatException e) {
+                logger.error("Invalid port number: {}", args[1]);
+                System.exit(1);
+                return;
+            }
         } else {
             port = Integer.parseInt(properties.getProperty("default.port", "5000"));
         }
 
-        if (args.length == 3) {
-            interfaceName = args[2];
-        } else {
-            interfaceName = System.getenv("MULTICAST_INTERFACE");
-        }
-
         try {
             InetAddress groupAddress = InetAddress.getByName(groupAddressStr);
+            String interfaceName = properties.getProperty("network.interface", "");
             DiscoveryService service = new DiscoveryService(groupAddress, port, properties, interfaceName);
             service.start();
-            logger.info("Multicast Discovery Service started. Instance ID: {}", DiscoveryService.INSTANCE_ID);
-
+            logger.info("Multicast Discovery started with ID: {}", service.getOwnId());
         } catch (UnknownHostException e) {
             logger.error("Invalid multicast group address: {}", groupAddressStr, e);
             System.exit(1);
