@@ -45,12 +45,15 @@ public class DiscoveryService {
         socket.setReuseAddress(true);
         socket.setTimeToLive(multicastTTL);
 
-        NetworkInterface networkInterface = getNetworkInterface();
+        boolean isIPv6 = groupAddress instanceof Inet6Address;
+
+        NetworkInterface networkInterface = getNetworkInterface(isIPv6);
+        System.out.println("Network interface: " + networkInterface.getName());
 
         SocketAddress group = new InetSocketAddress(groupAddress, port);
         socket.joinGroup(group, networkInterface);
 
-        localAddresses = getLocalAddresses();
+        localAddresses = getLocalAddresses(isIPv6);
     }
 
     public void start() {
@@ -123,7 +126,7 @@ public class DiscoveryService {
         logger.info("-----");
     }
 
-    private Set<InetAddress> getLocalAddresses() throws SocketException {
+    private Set<InetAddress> getLocalAddresses(boolean isIPv6) throws SocketException {
         Set<InetAddress> addresses = new HashSet<>();
         Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
         while (interfaces.hasMoreElements()) {
@@ -134,18 +137,31 @@ public class DiscoveryService {
             Enumeration<InetAddress> inetAddresses = ni.getInetAddresses();
             while (inetAddresses.hasMoreElements()) {
                 InetAddress addr = inetAddresses.nextElement();
-                addresses.add(addr);
+                if (isIPv6 && addr instanceof Inet6Address) {
+                    addresses.add(addr);
+                } else if (!isIPv6 && addr instanceof Inet4Address) {
+                    addresses.add(addr);
+                }
             }
         }
         return addresses;
     }
 
-    private NetworkInterface getNetworkInterface() throws SocketException {
+    private NetworkInterface getNetworkInterface(boolean isIPv6) throws SocketException {
         Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
         while (interfaces.hasMoreElements()) {
             NetworkInterface ni = interfaces.nextElement();
-            if (ni.isUp() && ni.supportsMulticast()) {
-                return ni;
+            if (ni.isUp() && ni.supportsMulticast() && ni.getName().startsWith("en")) {
+                Enumeration<InetAddress> addresses = ni.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    logger.info("Interface: {}, Address: {}", ni.getName(), addr.getHostAddress());
+                    if (isIPv6 && addr instanceof Inet6Address) {
+                        return ni;
+                    } else if (!isIPv6 && addr instanceof Inet4Address) {
+                        return ni;
+                    }
+                }
             }
         }
         throw new SocketException("No suitable network interface found for multicast");
