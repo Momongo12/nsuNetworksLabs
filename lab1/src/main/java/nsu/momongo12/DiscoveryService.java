@@ -11,6 +11,10 @@ import java.util.concurrent.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * @author momongo12
+ * @version 1.0
+ */
 public class DiscoveryService {
 
     private static final Logger logger = LoggerFactory.getLogger(DiscoveryService.class);
@@ -62,11 +66,7 @@ public class DiscoveryService {
             socket.joinGroup(groupAddress);
             logger.info("Joined IPv4 multicast group {} on interface {}", groupAddress, networkInterface.getName());
         }
-
-        localAddresses = getLocalAddresses(isIPv6, networkInterface);
     }
-
-    private final Set<InetAddress> localAddresses;
 
     public void start() {
         scheduler.scheduleAtFixedRate(this::sendHeartbeat, 0, heartbeatInterval, TimeUnit.MILLISECONDS);
@@ -157,20 +157,6 @@ public class DiscoveryService {
         logger.info("-----");
     }
 
-    private Set<InetAddress> getLocalAddresses(boolean isIPv6, NetworkInterface ni) {
-        Set<InetAddress> addresses = new HashSet<>();
-        Enumeration<InetAddress> inetAddresses = ni.getInetAddresses();
-        while (inetAddresses.hasMoreElements()) {
-            InetAddress addr = inetAddresses.nextElement();
-            if (isIPv6 && addr instanceof Inet6Address) {
-                addresses.add(addr);
-            } else if (!isIPv6 && addr instanceof Inet4Address) {
-                addresses.add(addr);
-            }
-        }
-        return addresses;
-    }
-
     private NetworkInterface getNetworkInterface(boolean isIPv6, String interfaceName) throws SocketException {
         Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
         while (interfaces.hasMoreElements()) {
@@ -217,29 +203,5 @@ public class DiscoveryService {
 
     public String getOwnId() {
         return this.ownId;
-    }
-
-    private static class HeartbeatMessage {
-        private String id;
-        private boolean readiness;
-        private String address;
-
-        public HeartbeatMessage(String id, boolean readiness, InetAddress address) {
-            this.id = id;
-            this.readiness = readiness;
-            this.address = address.getHostAddress();
-        }
-
-        public String getId() {
-            return id;
-        }
-
-        public boolean isReadiness() {
-            return readiness;
-        }
-
-        public String getAddress() {
-            return address;
-        }
     }
 }

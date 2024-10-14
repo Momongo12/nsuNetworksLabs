@@ -3,6 +3,10 @@ package nsu.momongo12;
 import java.net.InetAddress;
 import java.util.Objects;
 
+/**
+ * @author momongo12
+ * @version 1.0
+ */
 public record InstanceInfo(String id, boolean readiness, InetAddress address) {
 
     @Override

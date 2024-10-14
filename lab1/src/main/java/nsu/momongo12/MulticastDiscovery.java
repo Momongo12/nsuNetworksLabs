@@ -8,6 +8,10 @@ import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * @author momongo12
+ * @version 1.0
+ */
 public class MulticastDiscovery {
 
     private static final Logger logger = LoggerFactory.getLogger(MulticastDiscovery.class);
