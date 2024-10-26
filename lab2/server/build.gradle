@@ -1,0 +1,42 @@
+plugins {
+    id 'java'
+    id "com.github.johnrengelman.shadow" version "8.1.1"
+}
+
+group = 'nsu.momongo12'
+version = '1.0-SNAPSHOT'
+
+sourceCompatibility = '17'
+targetCompatibility = '17'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    // LOGGING
+    implementation 'org.slf4j:slf4j-api:1.7.36'
+    implementation 'ch.qos.logback:logback-classic:1.2.11'
+
+    // TEST
+    testImplementation platform('org.junit:junit-bom:5.9.1')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+shadowJar {
+    archiveBaseName.set('tcp-server')
+    archiveVersion.set('1.0')
+    archiveClassifier.set('')
+    manifest.attributes('Main-Class': 'nsu.momongo12.Main')
+}
+
+tasks.build {
+    dependsOn shadowJar
+}
+
+test {
+    useJUnitPlatform()
+}
