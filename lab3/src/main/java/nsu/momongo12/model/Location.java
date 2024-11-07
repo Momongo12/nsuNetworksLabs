@@ -1,5 +1,6 @@
 package nsu.momongo12.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
 
 /**
@@ -7,8 +8,9 @@ import lombok.Data;
  * @version 1.0
  */
 @Data
+@AllArgsConstructor
 public class Location {
-    private final String name;
-    private final double latitude;
-    private final double longitude;
+    private String name;
+    private double latitude;
+    private double longitude;
 }

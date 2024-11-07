@@ -1,5 +1,6 @@
 package nsu.momongo12.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.util.List;
@@ -9,7 +10,8 @@ import java.util.List;
  * @version 1.0
  */
 @Data
+@AllArgsConstructor
 public class Result {
-    private final Weather weather;
-    private final List<Place> places;
+    private Weather weather;
+    private List<Place> places;
 }

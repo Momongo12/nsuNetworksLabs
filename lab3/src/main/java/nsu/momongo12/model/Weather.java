@@ -1,5 +1,6 @@
 package nsu.momongo12.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
 
 /**
@@ -7,7 +8,8 @@ import lombok.Data;
  * @version 1.0
  */
 @Data
+@AllArgsConstructor
 public class Weather {
-    private final String description;
-    private final double temperature;
+    private String description;
+    private double temperature;
 }
