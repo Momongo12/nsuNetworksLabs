@@ -53,6 +53,7 @@ public class Socks5Server implements AutoCloseable {
                 } catch (IOException e) {
                     log.warn("IOException in selector loop: " + e.getMessage());
                     key.cancel();
+                    ((ChannelPair) key.attachment()).close();
 
                     Channel channel = key.channel();
                     if (channel != null && channel.isOpen()) {
