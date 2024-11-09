@@ -1,6 +1,7 @@
 package nsu.momongo12.model;
 
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -13,6 +14,7 @@ import java.util.Queue;
  * @version 1.0
  */
 @Data
+@Slf4j
 public class ChannelPair {
 
     private SocketChannel clientChannel;
@@ -26,12 +28,16 @@ public class ChannelPair {
         this.serverChannel = serverChannel;
     }
 
-    public SocketChannel getActiveChannel(SocketChannel socketChannel) {
-        return socketChannel == clientChannel ? clientChannel : serverChannel;
-    }
-
     public void close() throws IOException {
-        clientChannel.close();
-        serverChannel.close();
+        try {
+            if (clientChannel != null && clientChannel.isOpen()) {
+                clientChannel.close();
+            }
+            if (serverChannel != null && serverChannel.isOpen()) {
+                serverChannel.close();
+            }
+        } catch (IOException e) {
+            log.warn("Error while closing channels: " + e.getMessage());
+        }
     }
 }

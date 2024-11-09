@@ -1,6 +1,7 @@
 package nsu.momongo12;
 
 import lombok.extern.slf4j.Slf4j;
+import nsu.momongo12.logic.Socks5Server;
 
 /**
  * @author momongo12
@@ -10,10 +11,10 @@ import lombok.extern.slf4j.Slf4j;
 public class Main {
 
     public static void main(String[] args) {
-        try {
-            new Socks5Server().start();
+        try (var server = new Socks5Server()) {
+            server.start();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Unexpected server error", e);
         }
     }
 }
