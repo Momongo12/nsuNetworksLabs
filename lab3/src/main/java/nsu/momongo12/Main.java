@@ -13,6 +13,7 @@ import nsu.momongo12.model.Weather;
 import nsu.momongo12.service.LocationService;
 import nsu.momongo12.service.PlaceService;
 import nsu.momongo12.service.WeatherService;
+import nsu.momongo12.service.remote.ApiClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -138,6 +139,9 @@ public class Main {
     }
 
     private void exit() {
+        ApiClient.getInstance().getClient().dispatcher().executorService().shutdown();
+        ApiClient.getInstance().getClient().connectionPool().evictAll();
+
         latch.countDown();
     }
 }
